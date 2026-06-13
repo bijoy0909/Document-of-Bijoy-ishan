@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Documents - Document Vault</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-dashboard">
+  <div class="card dashboard-card">
+    <button class="lang-toggle" onclick="toggleLang()">বাংলা</button>
+    <div class="topbar">
+      <span id="user-email"></span>
+      <button class="secondary" style="width:auto;" onclick="logout()" data-i18n="logout">Logout</button>
+    </div>
+
+    <h1 data-i18n="dashboard_title">📁 My Documents</h1>
+
+    <div class="upload-box">
+      <input type="file" id="file-input" />
+      <button id="upload-btn" style="margin-top:12px;" data-i18n="upload_btn">Upload</button>
+      <div class="msg" id="upload-msg"></div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th data-i18n="th_filename">File Name</th>
+          <th data-i18n="th_date">Uploaded On</th>
+          <th data-i18n="th_actions">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="file-list"></tbody>
+    </table>
+
+    <div class="empty-note hidden" id="empty-note" data-i18n="empty_note">No files uploaded yet.</div>
+  </div>
+
+  <script src="i18n.js"></script>
+  <script src="config.js"></script>
+  <script>
+    let currentUser = null;
+
+    async function init() {
+      const { data } = await supabaseClient.auth.getSession();
+      if (!data.session) {
+        window.location.href = 'index.html';
+        return;
+      }
+      currentUser = data.session.user;
+      document.getElementById('user-email').textContent = currentUser.email;
+      loadFiles();
+    }
+
+    async function logout() {
+      await supabaseClient.auth.signOut();
+      window.location.href = 'index.html';
+    }
+
+    // Upload file
+    document.getElementById('upload-btn').addEventListener('click', async () => {
+      const fileInput = document.getElementById('file-input');
+      const file = fileInput.files[0];
+      const msgEl = document.getElementById('upload-msg');
+
+      if (!file) {
+        msgEl.textContent = t('msg_select_file');
+        msgEl.className = 'msg error';
+        return;
+      }
+
+      msgEl.textContent = t('msg_uploading');
+      msgEl.className = 'msg';
+
+      const filePath = `${currentUser.id}/${Date.now()}_${file.name}`;
+      const { error } = await supabaseClient.storage.from(BUCKET_NAME).upload(filePath, file);
+
+      if (error) {
+        msgEl.textContent = t('msg_upload_failed') + error.message;
+        msgEl.className = 'msg error';
+      } else {
+        msgEl.textContent = t('msg_upload_success');
+        msgEl.className = 'msg success';
+        fileInput.value = '';
+        loadFiles();
+      }
+    });
+
+    // List files
+    async function loadFiles() {
+      const { data, error } = await supabaseClient.storage.from(BUCKET_NAME).list(currentUser.id, {
+        sortBy: { column: 'created_at', order: 'desc' }
+      });
+
+      const listEl = document.getElementById('file-list');
+      const emptyEl = document.getElementById('empty-note');
+      listEl.innerHTML = '';
+
+      if (error || !data || data.length === 0) {
+        emptyEl.classList.remove('hidden');
+        return;
+      }
+      emptyEl.classList.add('hidden');
+
+      for (const file of data) {
+        const tr = document.createElement('tr');
+        const displayName = file.name.replace(/^\d+_/, ''); // remove timestamp prefix
+        const date = file.created_at ? new Date(file.created_at).toLocaleString() : '-';
+
+        tr.innerHTML = `
+          <td>${displayName}</td>
+          <td>${date}</td>
+          <td class="actions">
+            <button class="secondary" onclick="downloadFile('${file.name}')">${t('btn_download')}</button>
+            <button class="danger" onclick="deleteFile('${file.name}')">${t('btn_delete')}</button>
+          </td>
+        `;
+        listEl.appendChild(tr);
+      }
+    }
+
+    // Download file
+    async function downloadFile(fileName) {
+      const filePath = `${currentUser.id}/${fileName}`;
+      const { data, error } = await supabaseClient.storage.from(BUCKET_NAME).createSignedUrl(filePath, 60);
+
+      if (error) {
+        alert(t('alert_download_failed') + error.message);
+        return;
+      }
+      window.open(data.signedUrl, '_blank');
+    }
+
+    // Delete file
+    async function deleteFile(fileName) {
+      if (!confirm(t('confirm_delete'))) return;
+
+      const filePath = `${currentUser.id}/${fileName}`;
+      const { error } = await supabaseClient.storage.from(BUCKET_NAME).remove([filePath]);
+
+      if (error) {
+        alert(t('alert_delete_failed') + error.message);
+      } else {
+        loadFiles();
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Document Vault - Login</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-login">
+  <div class="card">
+    <button class="lang-toggle" onclick="toggleLang()">বাংলা</button>
+    <h1 data-i18n="app_title">📁 Document Vault</h1>
+
+    <div class="tabs">
+      <div class="tab active" id="tab-login" onclick="switchTab('login')" data-i18n="tab_login">Login</div>
+      <div class="tab" id="tab-signup" onclick="switchTab('signup')" data-i18n="tab_signup">Sign Up</div>
+    </div>
+
+    <!-- LOGIN FORM -->
+    <form id="login-form">
+      <div class="form-group">
+        <label data-i18n="label_email">Email</label>
+        <input type="email" id="login-email" required />
+      </div>
+      <div class="form-group">
+        <label data-i18n="label_password">Password</label>
+        <input type="password" id="login-password" required />
+      </div>
+      <button type="submit" data-i18n="btn_login">Login</button>
+      <div class="link"><a href="forgot-password.html" data-i18n="forgot_link">Forgot password?</a></div>
+    </form>
+
+    <!-- SIGNUP FORM -->
+    <form id="signup-form" class="hidden">
+      <div class="form-group">
+        <label data-i18n="label_email">Email</label>
+        <input type="email" id="signup-email" required />
+      </div>
+      <div class="form-group">
+        <label data-i18n="label_password_min">Password (min 6 characters)</label>
+        <input type="password" id="signup-password" minlength="6" required />
+      </div>
+      <button type="submit" data-i18n="btn_signup">Create Account</button>
+    </form>
+
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <script src="i18n.js"></script>
+  <script src="config.js"></script>
+  <script>
+    function switchTab(tab) {
+      document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+      document.getElementById('tab-signup').classList.toggle('active', tab === 'signup');
+      document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
+      document.getElementById('signup-form').classList.toggle('hidden', tab !== 'signup');
+      document.getElementById('msg').textContent = '';
+    }
+
+    function showMsg(text, type) {
+      const el = document.getElementById('msg');
+      el.textContent = text;
+      el.className = 'msg ' + type;
+    }
+
+    // ---- LOGIN ----
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+
+      showMsg(t('msg_logging_in'), '');
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        showMsg(t('msg_wrong_credentials'), 'error');
+      } else {
+        window.location.href = 'dashboard.html';
+      }
+    });
+
+    // ---- SIGNUP ----
+    document.getElementById('signup-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('signup-email').value.trim();
+      const password = document.getElementById('signup-password').value;
+
+      showMsg(t('msg_creating_account'), '');
+      const { data, error } = await supabaseClient.auth.signUp({ email, password });
+
+      if (error) {
+        showMsg(error.message, 'error');
+      } else {
+        showMsg(t('msg_account_created'), 'success');
+        switchTab('login');
+      }
+    });
+
+    // If already logged in, redirect to dashboard
+    (async () => {
+      const { data } = await supabaseClient.auth.getSession();
+      if (data.session) window.location.href = 'dashboard.html';
+    })();
+  </script>
+</body>
+</html>
